@@ -3,33 +3,16 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery
-from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton, ReplyKeyboardBuilder, KeyboardButton
 import asyncio
 import sys
-import configparser
+from settings.settings_imports import TOKEN, welcome_text, admin_import
 import logging
 from settings.categories import categories
 from methods.db_operations import DataBase
-from methods.keyboards import *
+from methods.keyboards import (admin_menu_keyboard, main_admin_menu_keyboard, quiz_keyboard,
+                               menu_keyboard, find_event_keyboard, category_keyboard)
 from methods.reformate_for_output import reformat, calendar, create_info
 
-# -----settings import------
-cfg = configparser.ConfigParser()
-cfg.read("settings/settings.ini")
-# --------------------------
-
-# --importing welcome text--
-with open("texts/hello.txt", 'r', encoding="UTF-8") as wt:
-    welcome_text = wt.read()
-# --------------------------
-
-# -----global variables-----
-filtered_users = []
-user_data = {}
-user_count = {}
-action = {}
-events = {}
-# --------------------------
 
 # -database initialization--
 db = DataBase()
@@ -42,12 +25,13 @@ print(db.create_list_of_users())
 print(db.create_list_of_events())
 # --------------------------
 
-# ------admin import--------
-admins = []
-for i in db.show_users():
-    user = list(i)
-    if 'admin' in user[2]:
-        admins.append(int(user[0]))
+# -----global variables-----
+admins = admin_import(db)
+filtered_users = []
+user_data = {}
+user_count = {}
+action = {}
+events = {}
 # --------------------------
 
 # -------start logger-------
@@ -60,18 +44,12 @@ logger = logging.getLogger(__name__)
 # --------------------------
 
 # --------bot start---------
-bot = Bot(token=cfg["Main"]["TOKEN"], default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 # --------------------------
 
-# -------category keyboard--------
-category_keyboard = InlineKeyboardBuilder()
-for i in categories:
-    cd = "event_category__" + i
-    category_keyboard.add(InlineKeyboardButton(text=i, callback_data=cd))
-# --------------------------------
 
-
+# ------authorization-------
 @dp.message(CommandStart())
 async def command_start_handler(message: Message) -> None:
     global user_data, user_count
@@ -108,8 +86,10 @@ async def quiz_keyboard_callback(callback: CallbackQuery) -> None:
         u = user_data.get(user)
         db.add_user(str(user), "".join([str(i) for i in range(len(categories)) if u[i]]))
         await callback.message.answer(text='Успешная регистрация', reply_markup=menu_keyboard.as_markup())
+# --------------------------
 
 
+# -------user menu----------
 @dp.callback_query(F.data.startswith("menu"))
 async def menu_keyboard_callback(callback: CallbackQuery) -> None:
     answer = callback.data.split("_")[1]
@@ -120,18 +100,20 @@ async def menu_keyboard_callback(callback: CallbackQuery) -> None:
             await callback.message.answer(text=create_info(list(k)))
     elif answer == "calendar":
         await callback.message.answer(calendar(db.show_events()))
+# --------------------------
 
 
+# -------admin panel--------
+# ========admin menu========
 @dp.message(Command('admin'), F.from_user.id.in_(admins))
 async def admin_panel(message: Message) -> None:
-    print(db.find_user(message.from_user.id)[0])
     if "main admin" in db.find_user(message.from_user.id)[0]:
         await message.answer(text='Добро пожаловать величайший.', reply_markup=main_admin_menu_keyboard.as_markup())
     else:
         await message.answer(text='Вы вошли в панель администратора.', reply_markup=admin_menu_keyboard.as_markup())
 
-
-@dp.callback_query(F.data.startswith("main_admin"))
+# additional main admin functions
+@dp.callback_query(F.data.startswith("main_admin"), F.from_user.id.in_(admins))
 async def main_admin_callback(callback: CallbackQuery) -> None:
     answer = callback.data.split("__")[1]
     if answer == "add_admin":
@@ -155,7 +137,7 @@ async def main_admin_callback(callback: CallbackQuery) -> None:
             await callback.message.answer(text=ans)
 
 
-@dp.callback_query(F.data.startswith("admin"))
+@dp.callback_query(F.data.startswith("admin"), F.from_user.id.in_(admins))
 async def admin_callback(callback: CallbackQuery) -> None:
     answer = callback.data.split('__')[1]
     if answer == 'add_event':
@@ -170,10 +152,14 @@ async def admin_callback(callback: CallbackQuery) -> None:
         await callback.message.answer(text="выберите критерий", reply_markup=find_event_keyboard.as_markup())
     elif answer == "show_events":
         await callback.message.answer(text=reformat(db.show_events()))
+    elif answer == "emergency":
+        action[callback.from_user.id] = "emergency"
+        await callback.message.answer(text="Введите текст экстренного сообшения в формате: /e ...")
 
+# ==========================
 
-# --------add event---------
-@dp.message(F.text, Command('event_name'))
+# ======add/find event======
+@dp.message(F.text, Command('event_name'), F.from_user.id.in_(admins))
 async def name_of_event(message: Message):
     answer = message.text[12::]
     if action[message.from_user.id] == "add_event":
@@ -185,7 +171,7 @@ async def name_of_event(message: Message):
         action[message.from_user.id] = ""
 
 
-@dp.callback_query(F.data.startswith("event_category"))
+@dp.callback_query(F.data.startswith("event_category"), F.from_user.id.in_(admins))
 async def category_callback(callback: CallbackQuery) -> None:
     answer = callback.data.split('__')[1]
     if action[callback.from_user.id] == "add_event":
@@ -198,7 +184,7 @@ async def category_callback(callback: CallbackQuery) -> None:
         action[callback.from_user.id] = ""
 
 
-@dp.message(F.text, Command("event_date"))
+@dp.message(F.text, Command("event_date"), F.from_user.id.in_(admins))
 async def date_of_event(message: Message):
     answer = message.text.split(' ')[1]
     if action[message.from_user.id] == "add_event":
@@ -211,7 +197,7 @@ async def date_of_event(message: Message):
         action[message.from_user.id] = ""
 
 
-@dp.message(F.text, Command("event_description"))
+@dp.message(F.text, Command("event_description"), F.from_user.id.in_(admins))
 async def description_of_event(message: Message):
     answer = message.text[19::]
     u = events.get(message.from_user.id)
@@ -223,10 +209,9 @@ async def description_of_event(message: Message):
     else:
         await message.answer(text=res)
     action[message.from_user.id] = ""
-# --------------------------------
 
 
-@dp.callback_query(F.data.startswith("find_event"))
+@dp.callback_query(F.data.startswith("find_event"), F.from_user.id.in_(admins))
 async def find_event_callback(callback: CallbackQuery) -> None:
     answer = callback.data.split('__')[1]
     if answer == "name":
@@ -235,9 +220,11 @@ async def find_event_callback(callback: CallbackQuery) -> None:
         await callback.message.answer(text="Выберите категорию", reply_markup=category_keyboard.as_markup())
     elif answer == "date":
         await callback.message.answer(text="Введите дату в формате /event_date дд.мм.гггг")
+# ==========================
 
 
-@dp.message(F.text, Command('id'))
+# ===admin menu callbacks===
+@dp.message(F.text, Command('id'), F.from_user.id.in_(admins))
 async def take_id(message: Message):
     if action[message.from_user.id] == "add_admin":
         ans = db.add_admin(message.text[4::])
@@ -268,7 +255,19 @@ async def take_id(message: Message):
         else:
             await message.answer(text=ans)
         action[message.from_user.id] = ""
+# ==========================
 
+
+# ====emergency message=====
+@dp.message(F.text, Command('e'), F.from_user.id.in_(admins))
+async def emergency_message_send(message: Message):
+    answer = message.text[3::]
+    for i in db.show_users():
+        user_id = int(list(i)[0])
+        await bot.send_message(chat_id=user_id, text=answer)
+    action[message.from_user.id] = ''
+# ==========================
+# --------------------------
 
 
 @dp.message(F.text)

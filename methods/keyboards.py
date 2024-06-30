@@ -1,4 +1,6 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton, ReplyKeyboardBuilder, KeyboardButton
+from settings.categories import categories
+
 
 # ------admin keyboard create-----
 admin_menu_keyboard = InlineKeyboardBuilder()
@@ -6,8 +8,9 @@ keyboard_button_add_event = InlineKeyboardButton(text="Добавить меро
 keyboard_button_delete_event = InlineKeyboardButton(text="Удалить мероприятие", callback_data="admin__delete_event")
 keyboard_button_find_events = InlineKeyboardButton(text="найти мероприятия", callback_data="admin__find_events")
 keyboard_button_show_events = InlineKeyboardButton(text="Показать мероприятия", callback_data="admin__show_events")
+keyboard_button_emergency_message = InlineKeyboardButton(text="Экстренное сообщение", callback_data="admin__emergency")
 admin_menu_keyboard.add(keyboard_button_add_event, keyboard_button_delete_event,
-                        keyboard_button_find_events, keyboard_button_show_events)
+                        keyboard_button_find_events, keyboard_button_show_events, keyboard_button_emergency_message)
 # --------------------------------
 
 # ---main admin keyboard create---
@@ -22,6 +25,7 @@ main_admin_keyboard_button_show_users = InlineKeyboardButton(text="Показа�
                                                        callback_data="main_admin__show_users")
 main_admin_menu_keyboard.add(keyboard_button_add_event, keyboard_button_delete_event,
                              keyboard_button_find_events, keyboard_button_show_events,
+                             keyboard_button_emergency_message,
                              main_admin_keyboard_button_add_admin, main_admin_keyboard_button_delete_admin,
                              main_admin_keyboard_button_find_user, main_admin_keyboard_button_show_users)
 # --------------------------------
@@ -65,4 +69,11 @@ keyboard_button_date = InlineKeyboardButton(text="Дата", callback_data="find
 find_event_keyboard.add(keyboard_button_name)
 find_event_keyboard.add(keyboard_button_category)
 find_event_keyboard.add(keyboard_button_date)
+# --------------------------------
+
+# -------category keyboard--------
+category_keyboard = InlineKeyboardBuilder()
+for i in categories:
+    cd = "event_category__" + i
+    category_keyboard.add(InlineKeyboardButton(text=i, callback_data=cd))
 # --------------------------------
