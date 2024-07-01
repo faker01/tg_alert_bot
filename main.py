@@ -93,13 +93,17 @@ async def quiz_keyboard_callback(callback: CallbackQuery) -> None:
 @dp.callback_query(F.data.startswith("menu"))
 async def menu_keyboard_callback(callback: CallbackQuery) -> None:
     answer = callback.data.split("_")[1]
-    print(answer)
+    user = db.find_user(callback.from_user.id)
     if answer == "info":
         for k in db.show_events():
-            print(k)
-            await callback.message.answer(text=create_info(list(k)))
+            inf = create_info(list(k), user, categories)
+            if inf:
+                await callback.message.answer(text=inf)
     elif answer == "calendar":
-        await callback.message.answer(calendar(db.show_events()))
+        for k in db.show_events():
+            inf = calendar(k, user, categories)
+            if inf:
+                await callback.message.answer(text=inf)
 # --------------------------
 
 
